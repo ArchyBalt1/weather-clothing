@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	database "weather-clothing/internal/db"
+	"weather-clothing/internal/output"
 	w "weather-clothing/internal/weather"
 
 	"github.com/joho/godotenv"
@@ -11,7 +12,7 @@ import (
 )
 
 func main() {
-	err := godotenv.Load("F:\\got\\weather-clothing\\.env") // Достали ключ
+	err := godotenv.Load("../../.env") // Достали ключ
 	if err != nil {
 		log.Println("Ошибка при .env загрузке")
 		return
@@ -26,26 +27,38 @@ func main() {
 
 	var a string
 	for {
-		fmt.Println("Выберите действие\n1: Узнать температуру\n2: Прочитать бд (последние 10 записей)")
+		output.Hello()
 		fmt.Scan(&a)
 		switch a {
 		case "1":
-			city, temp, err := w.WeatherFunc()
-			if err != nil {
-				log.Println(err)
+			city, temp, conditions, pressure, wind_speed, err := w.WeatherFunc()
+			if city == "Arpol" {
+				continue
+			} else if err != nil {
+				log.Println("Ошибка при получении погодных условий", err)
+				return
 			}
-			fmt.Println(city, temp)
-			err = database.WeatherHistory(db, city, temp)
+
+			err = database.WriteWeatherHistory(db, city, temp, conditions, pressure, wind_speed)
 			if err != nil {
 				log.Println("Ошибка при insert запросе", err)
 				return
 			}
+
+			notification := database.NotificationConditionsPressureWind_speed(db, conditions, pressure, wind_speed)
+
+			output.PrintWeatherResult(city, temp, conditions, notification, wind_speed, pressure)
 		case "2":
-			city := "qwe"
-			temp := 12
-			err := database.ReadHistory(db, city, temp)
+			err := database.ReadHistory(db) // вывод в функции
 			if err != nil {
 				log.Println(err)
+				return
+			}
+		case "3":
+			err := database.ClothingAdvice(db)
+			if err != nil {
+				log.Println(err)
+				return
 			}
 		default:
 			return

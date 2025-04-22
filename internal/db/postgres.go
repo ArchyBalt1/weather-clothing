@@ -45,7 +45,7 @@ func WriteWeatherHistory(db *sql.DB, city string, temp int, conditions string, p
 	return nil
 } // insert запрос
 
-func ReadHistory(db *sql.DB) error {
+func HistoryLimit10(db *sql.DB) error {
 	sql1, args, err := sq.
 		Select("id").
 		From("weather_history").
@@ -66,34 +66,30 @@ func ReadHistory(db *sql.DB) error {
 		return err
 	} // Храним только 10 последних запросов
 
+	return nil
+}
+
+func ReadHistory(db *sql.DB) ([]string, []models.WeatherHistory_10, error) {
 	rows, err := sq.Select("city", "temp", "conditions", "pressure", "wind_speed", "date").From("weather_history").RunWith(db).Query()
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 	defer rows.Close()
 	var wHistory []models.WeatherHistory_10
 
-	var cityes string
 	Slicecity := make([]string, 0, 10)
 	for rows.Next() {
 		var w models.WeatherHistory_10
 		if err := rows.Scan(&w.City, &w.Temp, &w.Conditions, &w.Pressure, &w.Wind_speed, &w.Date); err != nil {
-			return err
+			return nil, nil, err
 		}
 
 		wHistory = append(wHistory, w)
 		Slicecity = append(Slicecity, w.City)
 	}
 
-	for {
-		FilterSlice := logic.Filter(Slicecity)
-		signal := output.PrintHistoryResult(FilterSlice, cityes, wHistory)
-		if signal == "break" {
-			break
-		}
-	} // работа с историей загрузкит в бд (10 записей. Можем выбрать, какой город посмотреть)
-	return nil
-}
+	return Slicecity, wHistory, nil
+} // работа с историей загрузкит в бд (10 записей. Можем выбрать, какой город посмотреть)
 
 func ClothingAdvice(db *sql.DB) error {
 	var a int
@@ -113,12 +109,39 @@ func ClothingAdvice(db *sql.DB) error {
 		}
 
 		for {
-			signal := output.PrintClothingAdviceResult_LastEntry(style, StyleString, resstyle)
+			signal := output.PrintClothingAdviceResult(style, StyleString, resstyle)
 			if signal == "break" {
 				break
 			}
 		}
+	case 2:
+		if err := HistoryLimit10(db); err != nil {
+			return err
+		}
+		Slicecity, wHistory, err := ReadHistory(db)
+		if err != nil {
+			return err
+		}
+		FilterSlice := logic.FilterMap(Slicecity, wHistory)
 
+		var style models.Style
+		var resstyle []models.ResStyle
+		for {
+			signal := output.PrintClothingAdviceResultHistory(FilterSlice, wHistory, &style)
+			if signal == "break" {
+				break
+			}
+
+			StyleString, err := Advice(db, style, &resstyle)
+			if err != nil {
+				return err
+			}
+
+			signal = output.PrintClothingAdviceResult(style, StyleString, resstyle)
+			if signal == "break" {
+				break
+			}
+		}
 	}
 	return nil
 } // стиль

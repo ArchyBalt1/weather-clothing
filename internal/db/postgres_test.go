@@ -66,3 +66,35 @@ func TestNotificationConditionsPressureWind_speed(t *testing.T) {
 	}
 	db.Close()
 }
+
+func TestWriteWeatherHistory(t *testing.T) {
+	type args struct {
+		city       string
+		temp       int
+		conditions string
+		pressure   int
+		wind_speed float32
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantErr bool
+	}{
+		{name: "strings",
+			args:    args{city: "нОВоСибирСк", temp: 25, conditions: "Clear", pressure: 1000, wind_speed: 5},
+			wantErr: false},
+	}
+	db := ConnectTestdb()
+	if db == nil {
+		fmt.Println("Подключение к бд с ошибкой")
+		return
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := WriteWeatherHistory(db, tt.args.city, tt.args.temp, tt.args.conditions, tt.args.pressure, tt.args.wind_speed); (err != nil) != tt.wantErr {
+				t.Errorf("WriteWeatherHistory() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+	db.Close()
+}

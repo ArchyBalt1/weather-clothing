@@ -10,66 +10,95 @@ import (
 )
 
 func Hello() {
-	fmt.Println("Выберите пункт\n1: Погодные условия\n2: История запросов (последние 10 записей)\n3: Совет по luck(ограниченно-полный доступ)")
+	fmt.Println("📋 Что сегодня хочешь узнать?")
+}
+
+func HelloMenu(i *int) {
+	if *i > 0 {
+		fmt.Println("\nДавай выясним что-то ещё")
+	}
+	fmt.Print("1: Погодные условия\n2: История запросов погодных условий\n3: Лучшие стили ➕ погодные условия\n> ")
+	*i++
 }
 
 func WeatherPrint(signal int) {
 	if signal == 0 {
-		fmt.Println("Введите название города или q для перемещения в меню:")
+		fmt.Print("🌆 Введите название города (или 'q' для выхода в меню):\n> ")
 	}
 	if signal == 1 {
-		fmt.Println("Введён неккоректный город")
+		fmt.Print("Введён неккоректный город\n> ")
+	}
+	if signal == 2 {
+		fmt.Print("🌆 Давай ещё один (не забывай про 'q'):\n> ")
 	}
 }
 
-func PrintWeatherResult(city string, temp int, conditions, notification string, wind_speed float32, pressure int) {
+func PrintWeatherResult(city string, temp int, conditions, notification string, wind_speed float32, pressure int) string {
 	var y string
-	fmt.Printf("%s %d°C, %s\n%s\n\n", city, temp, conditions, notification)
+	fmt.Printf("📍 %s %d°C, %s\n%s\n\n", city, temp, conditions, notification)
 	for {
-		fmt.Print("Вывести подробности? (y/n)\n> ")
+		fmt.Print("🔍 Хочешь увидеть подробности? (y/n/q)\n> ")
 		fmt.Scan(&y)
 		if y == "y" || y == "н" {
 			fmt.Printf("📊 Подробности:\n• Скорость ветра %.2f м/с\n• Давление %d гПа\nЛюбая клавиша для продолжения...", wind_speed, pressure)
 			fmt.Scan(&y)
+			fmt.Println()
 			break
 		} else if y == "n" || y == "т" {
 			break
+		} else if y == "q" || y == "й" {
+			return "break"
 		}
+	}
+
+	return ""
+}
+
+func PrintHistoryRecent_requests(FilterSlice []string) {
+	fmt.Println("\n📜 Последние запросы:")
+	index := 1
+	for _, i := range FilterSlice {
+		fmt.Printf("%d: %s\n", index, i)
+		index++
 	}
 }
 
-func PrintHistoryResult(FilterSlice []string, wHistory []models.WeatherHistory_10) string {
-	fmt.Println("Недавно запрошенные города:")
-	for _, i := range FilterSlice {
-		fmt.Printf("> %s\n", i)
-	}
-
+func PrintHistoryResult(wHistory []models.WeatherHistory_10) string {
 	var cityes string
-	fmt.Println("Введите название для просмотра погоды или q для возврата в меню:")
+	fmt.Print("Введите название города (или 'q' для выхода в меню):\n> ")
 	fmt.Scan(&cityes)
 
 	if cityes == "q" || cityes == "й" {
 		return "break"
 	}
 
+	/*city, err := strconv.Atoi(cityes)
+	if err != nil {
+		fmt.Println("Введена не цифра, думал не заметно? 👀")
+		return "continue"
+	}*/
+
 	j := 1
 	for i := 9; i >= 0; i-- {
-		if cityes == wHistory[i].City {
-			fmt.Printf("Number: %d\n• %s %d°C, %s; Wind: %.2f м/c; Pressure: %d гПа; Time: %v\n", j, wHistory[i].City, wHistory[i].Temp, wHistory[i].Conditions, wHistory[i].Wind_speed, wHistory[i].Pressure, wHistory[i].Date.Format("15:04:05 02-01-2006"))
+		if strings.EqualFold(cityes, wHistory[i].City) {
+			if j == 1 {
+				fmt.Println("\n📋 Недавно запрошенные позиции:")
+			}
+			fmt.Printf("• %d: %v\n%s %d°C, %s\nWind: %.2f м/c; Pressure: %d гПа\n\n", j, wHistory[i].Date.Format("15:04, 02-01-2006"), wHistory[i].City, wHistory[i].Temp, wHistory[i].Conditions, wHistory[i].Wind_speed, wHistory[i].Pressure)
 			j++
 		}
 	}
 	if j == 1 {
-		fmt.Println("Введён неккоректный город, давай повнимательнее")
+		fmt.Println("\n🫨  Введён неккоректный город, давай поднимательнее")
 	} else {
-		fmt.Println("Может ещё один?")
+		fmt.Println("Может ещё один? 👀")
 	}
 
 	return ""
 }
 
 func PrintClothingAdviceResult_Hello() {
-	fmt.Print("Под какую погоду подоберём стиль?\n1. Последняя запрошенная\n2. Выбрать из 10 последних записей:\n")
+	fmt.Print("\n🧥 Под какую погоду подоберём стиль?\n1. Последняя запрошенная\n2. Выбрать из 10 последних записей:\n> ")
 }
 
 func PrintClothingAdviceResult(style models.Style, StyleString []string, resstyle []models.ResStyle) string {
@@ -81,11 +110,12 @@ func PrintClothingAdviceResult(style models.Style, StyleString []string, resstyl
 
 	NewMap := make(map[int]string)
 	scanner := bufio.NewScanner(os.Stdin)
-	fmt.Println("Выберите стиль или нажмите q для выхода в меню:")
+	fmt.Println("Выберите стиль (или 'q' для выхода в меню):")
 	for index, key := range StyleString {
 		fmt.Printf("• %d: %s\n", index+1, key)
 		NewMap[index+1] = key
 	}
+	fmt.Print("> ")
 	for {
 		var value string
 		var b int
@@ -105,7 +135,7 @@ func PrintClothingAdviceResult(style models.Style, StyleString []string, resstyl
 		IsViewed := false
 		for _, i := range resstyle {
 			if strings.EqualFold(i.Style, value) {
-				fmt.Printf("%s:\n%s\n", i.Style, i.Comments)
+				fmt.Printf("\n%s:\n%s\n", i.Style, i.Comments)
 				fmt.Println()
 				IsViewed = true
 				delete(NewMap, b)
@@ -115,55 +145,74 @@ func PrintClothingAdviceResult(style models.Style, StyleString []string, resstyl
 		if !IsViewed {
 			fmt.Println("Такого стиля нет в списке, давай повнимательнее")
 		} else if len(NewMap) == 0 {
-			fmt.Print("Стили закончились\n\n")
+			fmt.Print("😦 Стили закончились\n")
 			return "break"
 		} else if IsViewed {
-			fmt.Println("Хочешь посмотреть другой стиль?")
+			fmt.Println("Давай посмотрим ещё один стиль 🥷  (или 'q' для выхода в меню)")
 		}
 		for index, key := range NewMap {
 			fmt.Printf("• %d: %s\n", index, key)
 		}
+		fmt.Print("> ")
 	}
 }
 
 func PrintClothingAdviceResultHistory(FilterSlice []string, wHistory []models.WeatherHistory_10, style *models.Style) string {
 	var a string
-	fmt.Println("Города и данные:")
+	fmt.Println("🏙️  Города и данные:")
 	j := 1
 	for _, i := range wHistory {
-		fmt.Printf("Number: %d\n• %s %d°C, %s %v\n", j, i.City, i.Temp, i.Conditions, i.Date.Format("15:04 01-02-2006"))
+		fmt.Printf("• %d: %v\n%s %d°C, %s\n\n", j, i.Date.Format("15:04, 02-01-2006"), i.City, i.Temp, i.Conditions)
 		j++
 	}
-	fmt.Println("\nПосмотреть подробности y/n")
+	fmt.Print("Посмотрим подробности? y/n/q\n> ")
 	fmt.Scan(&a)
-	var index int
-	if a == "y" {
+
+	if a == "q" || a == "й" {
+		return "breakQ"
+	}
+
+	if a == "y" || a == "н" {
 		for {
 			j = 1
-			fmt.Println("Введите Number или 0 для выхода:")
-			fmt.Scan(&index)
-			if index == 0 {
+			fmt.Print("Введите номер города для просмотра подробностей ('q' для выхода в меню и 's' для продолжения):\n> ")
+			fmt.Scan(&a)
+			if a == "q" || a == "й" {
+				return "breakQ"
+			} else if a == "s" || a == "ы" {
 				break
 			}
+
+			aInt, err := strconv.Atoi(a)
+			if err != nil {
+				fmt.Println("Введено не число")
+				continue
+			}
 			for _, i := range wHistory {
-				if index == j {
-					fmt.Printf("Number: %d\n• %s %d°C, %s; Wind: %.2f м/c; Pressure: %d гПа; Time: %v\n", j, i.City, i.Temp, i.Conditions, i.Wind_speed, i.Pressure, i.Date.Format("15:04:05 02-01-2006"))
+				if aInt == j {
+					fmt.Printf("• %d: %v\n%s %d°C, %s\nWind: %.2f м/c; Pressure: %d гПа\n\n", j, i.Date.Format("15:04, 02-01-2006"), i.City, i.Temp, i.Conditions, i.Wind_speed, i.Pressure)
 				}
 				j++
 			}
 		}
 	}
 
-	fmt.Println("Выберите желаемый город или 0 для выхода в меню:")
+	fmt.Print("Выберите желаемый номер города для подборки подходящего стиля (или 'q' для выхода в меню):\n> ")
 	j = 1
 	for {
-		fmt.Scan(&index)
-		if index == 0 {
-			return "break"
+		fmt.Scan(&a)
+		if a == "q" {
+			return "breakQ"
 		}
-		if index >= 1 && index <= 10 {
+
+		aInt, err := strconv.Atoi(a)
+		if err != nil {
+			fmt.Println("Введено не число")
+			continue
+		}
+		if aInt >= 1 && aInt <= 10 {
 			for _, i := range wHistory {
-				if index == j {
+				if aInt == j {
 					style.City = i.City
 					style.Temp = i.Temp
 					style.Conditions = i.Conditions
@@ -171,10 +220,10 @@ func PrintClothingAdviceResultHistory(FilterSlice []string, wHistory []models.We
 				}
 				j++
 			}
-			break
+			return "break"
+
 		} else {
 			fmt.Println("Неккоректный номер")
 		}
 	}
-	return ""
 }

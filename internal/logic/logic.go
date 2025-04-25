@@ -1,8 +1,21 @@
 package logic
 
 import (
+	"log"
+	"os"
 	"weather-clothing/internal/models"
 )
+
+func LogFile() {
+	file, err := os.OpenFile("app.log", os.O_CREATE|os.O_APPEND|os.O_RDWR, 0123)
+	if err != nil {
+		log.Fatalln("Ошибка при открытии файла логов", err)
+	}
+
+	log.SetOutput(file)
+
+	log.SetFlags(log.Ldate | log.Ltime)
+}
 
 func FilterMap(Slicecity []string, wHistory []models.WeatherHistory_10) []string {
 	FilterMap := make(map[string]struct{})

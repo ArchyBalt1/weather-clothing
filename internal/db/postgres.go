@@ -37,7 +37,7 @@ func Init() (*sql.DB, error) {
 } // запуск бд
 
 func WriteWeatherHistory(db *sql.DB, city string, temp int, conditions string, pressure int, wind_speed float32) error {
-	_, err := sq.Insert("weather_history").Columns("city", "temp", "conditions", "pressure", "wind_speed").Values(city, temp, conditions, pressure, wind_speed).PlaceholderFormat(sq.Dollar).RunWith(db).Exec() // Добавка в бд
+	_, err := sq.Insert("weather_history").Columns("city", "temp", "conditions", "pressure", "wind_speed").Values(city, temp, conditions, pressure, wind_speed).PlaceholderFormat(sq.Dollar).RunWith(db).Exec() // Добавка в бд (сохранение в формате Qwer)
 	if err != nil {
 		return err
 	}
@@ -91,11 +91,8 @@ func ReadHistory(db *sql.DB) ([]string, []models.WeatherHistory_10, error) {
 	return Slicecity, wHistory, nil
 } // работа с историей загрузкит в бд (10 записей. Можем выбрать, какой город посмотреть)
 
-func ClothingAdvice(db *sql.DB) error {
-	var a int
-	output.PrintClothingAdviceResult_Hello()
-	fmt.Scan(&a)
-	switch a {
+func ClothingAdvice(db *sql.DB, b int) (models.Style, []string, []models.ResStyle, error) {
+	switch b {
 	case 1:
 		row := sq.Select("city", "temp", "conditions", "wind_speed").From("weather_history").OrderBy("id DESC").Limit(1).PlaceholderFormat(sq.Dollar).RunWith(db).QueryRow()
 
@@ -105,46 +102,49 @@ func ClothingAdvice(db *sql.DB) error {
 		var resstyle []models.ResStyle
 		StyleString, err := Advice(db, style, &resstyle)
 		if err != nil {
-			return err
+			return style, nil, nil, err
 		}
 
-		for {
-			signal := output.PrintClothingAdviceResult(style, StyleString, resstyle)
-			if signal == "break" {
-				break
-			}
-		}
+		return style, StyleString, resstyle, nil
 	case 2:
-		if err := HistoryLimit10(db); err != nil {
-			return err
-		}
 		Slicecity, wHistory, err := ReadHistory(db)
 		if err != nil {
-			return err
+			return models.Style{}, nil, nil, err
 		}
 		FilterSlice := logic.FilterMap(Slicecity, wHistory)
 
 		var style models.Style
 		var resstyle []models.ResStyle
+		StyleString := []string{}
 		for {
 			signal := output.PrintClothingAdviceResultHistory(FilterSlice, wHistory, &style)
-			if signal == "break" {
-				break
+			if signal == "breakQ" {
+				return models.Style{}, nil, nil, nil
 			}
 
-			StyleString, err := Advice(db, style, &resstyle)
+			StyleString, err = Advice(db, style, &resstyle)
 			if err != nil {
-				return err
+				return models.Style{}, nil, nil, err
 			}
-
-			signal = output.PrintClothingAdviceResult(style, StyleString, resstyle)
 			if signal == "break" {
 				break
 			}
 		}
+
+		return style, StyleString, resstyle, nil
 	}
-	return nil
+	return models.Style{}, nil, nil, nil
 } // стиль
+
+func ClothingAdviceHistory(db *sql.DB, style models.Style) ([]string, []models.ResStyle, error) {
+	var resstyle []models.ResStyle
+	StyleString, err := Advice(db, style, &resstyle)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return StyleString, resstyle, nil
+}
 
 func Advice(db *sql.DB, style models.Style, resstyle *[]models.ResStyle) ([]string, error) {
 	rows, err := sq.Select("style", "comments").From("clothing_advice").Where(sq.And{

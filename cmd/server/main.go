@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"log"
+	"os"
 	database "weather-clothing/internal/db"
 	"weather-clothing/internal/logic"
 	"weather-clothing/internal/output"
@@ -16,21 +18,30 @@ import (
 func main() {
 	err := godotenv.Load("../../.env") // Достали ключ
 	if err != nil {
-		log.Println("Ошибка при .env загрузке")
+		log.Println("Ошибка при .env загрузке", err)
 		return
 	}
 
 	db, err := database.Init()
 	if err != nil {
-		log.Println("Ошибка при запуске бд")
+		log.Println("Ошибка при запуске бд", err)
 		return
 	}
 	defer db.Close()
 
-	telegram.Bot(db)
+	logic.LogFile()
+
+	var start string
+	fmt.Print("Хотите запустить TelegramBot? y/any_key\n> ")
+	fmt.Scan(&start)
+	if start == "y" || start == "н" {
+		telegram.Bot(db)
+	}
 	var a string
+	output.Hello()
+	i := 0
 	for {
-		output.Hello()
+		output.HelloMenu(&i)
 		fmt.Scan(&a)
 		switch a {
 		case "1":
@@ -38,10 +49,16 @@ func main() {
 			var temp, pressure int
 			var wind_speed float32
 			var cityes string
+			output.WeatherPrint(0)
 			for {
-				output.WeatherPrint(0)
-				fmt.Scan(&cityes)
-				if cityes == "q" {
+				scanner := bufio.NewScanner(os.Stdin)
+				if scanner.Scan() {
+					cityes = scanner.Text()
+				}
+				if cityes == "" {
+					continue
+				}
+				if cityes == "q" || cityes == "й" {
 					break
 				}
 				city, temp, conditions, pressure, wind_speed, err = weather.WeatherFunc(cityes)
@@ -52,19 +69,21 @@ func main() {
 					log.Println("Ошибка при получении погодных условий", err)
 					return
 				} else {
-					break
+					err = database.WriteWeatherHistory(db, city, temp, conditions, pressure, wind_speed)
+					if err != nil {
+						log.Println("Ошибка при insert запросе", err)
+						return
+					}
+
+					notification := database.NotificationConditionsPressureWind_speed(db, conditions, pressure, wind_speed)
+
+					signal := output.PrintWeatherResult(city, temp, conditions, notification, wind_speed, pressure)
+					if signal == "break" {
+						break
+					}
+					output.WeatherPrint(2)
 				}
 			}
-
-			err = database.WriteWeatherHistory(db, city, temp, conditions, pressure, wind_speed)
-			if err != nil {
-				log.Println("Ошибка при insert запросе", err)
-				return
-			}
-
-			notification := database.NotificationConditionsPressureWind_speed(db, conditions, pressure, wind_speed)
-
-			output.PrintWeatherResult(city, temp, conditions, notification, wind_speed, pressure)
 		case "2":
 			if err := database.HistoryLimit10(db); err != nil {
 				log.Println(err)
@@ -76,21 +95,54 @@ func main() {
 				return
 			} // логика выборки
 			FilterSlice := logic.FilterMap(Slicecity, wHistory)
+			output.PrintHistoryRecent_requests(FilterSlice)
 			for {
-				signal := output.PrintHistoryResult(FilterSlice, wHistory)
+				signal := output.PrintHistoryResult(wHistory)
 				if signal == "break" {
 					break
+				} else if signal == "continue" {
+					continue
 				}
 			} // Вывод
 		case "3":
-			if err := database.HistoryLimit10(db); err != nil {
-				log.Println(err)
-				return
-			} // фильтруем 10 последних записей
-			err := database.ClothingAdvice(db)
-			if err != nil {
-				log.Println(err)
-				return
+			var b int
+			output.PrintClothingAdviceResult_Hello()
+			fmt.Scan(&b)
+			switch b {
+			case 1:
+				style, StyleString, resstyle, err := database.ClothingAdvice(db, b)
+				if err != nil {
+					log.Println(err)
+					return
+				}
+
+				for {
+					signal := output.PrintClothingAdviceResult(style, StyleString, resstyle)
+					if signal == "break" {
+						break
+					}
+				}
+			case 2:
+				if err := database.HistoryLimit10(db); err != nil {
+					log.Println(err)
+					return
+				} // фильтруем 10 последних записей
+
+				style, StyleString, resstyle, err := database.ClothingAdvice(db, b)
+				if err != nil {
+					log.Println(err)
+					return
+				}
+
+				for {
+					if StyleString == nil {
+						break
+					}
+					signal := output.PrintClothingAdviceResult(style, StyleString, resstyle)
+					if signal == "break" {
+						break
+					}
+				}
 			}
 		default:
 			return

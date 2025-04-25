@@ -15,10 +15,16 @@ import (
 	tgbot "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
-var weatherstate = make(map[int64]string)
-var weathercallback = make(map[int64]string)
-var NewMap = make(map[int]string)
-var style_choice_city = make(map[int64]models.Style)
+var weatherstate = make(map[int64]string)            // отслеживание состояния для переключения режимов
+var weathercallback = make(map[int64]string)         // отслеживание кнопок
+var styleMap = make(map[int]string)                  // кеш стилей
+var style_choice_city = make(map[int64]models.Style) // кеш города из выборки в /style
+
+const menu = `🏠 Главное меню:
+🔹 /weather — Узнать текущую погоду
+🔹 /history — История последних запросов
+🔹 /style — Подобрать стиль по погоде
+🔹 /h — Справка по командам`
 
 func Bot(db *sql.DB) {
 	tgtoken := os.Getenv("TGBOTTOKEN")
@@ -32,18 +38,20 @@ func Bot(db *sql.DB) {
 		log.Println(err)
 		return
 	}
-	log.Printf("Авторизация аккаунта %s", bot.Self.UserName)
 
+	log.Printf("Авторизация аккаунта %s", bot.Self.UserName)
 	u := tgbot.NewUpdate(0)
 	u.Timeout = 60
 
 	updates := bot.GetUpdatesChan(u)
 
 	for update := range updates {
-		// Сначала проверяем callback
 		if update.CallbackQuery != nil {
 			chatID := update.CallbackQuery.Message.Chat.ID
-			if update.CallbackQuery.Data == "show_details" {
+			data := update.CallbackQuery.Data
+
+			switch {
+			case data == "show_details":
 				detailinfo := weathercallback[chatID]
 
 				detailedMsg := tgbot.NewMessage(chatID, detailinfo)
@@ -56,23 +64,80 @@ func Bot(db *sql.DB) {
 
 				bot.Send(edit)
 				bot.Send(detailedMsg)
-
 				bot.Request(tgbot.NewCallback(update.CallbackQuery.ID, "Данные загружены 👍"))
+
+			case strings.HasPrefix(data, "history_"):
+				_, wHistory, err := database.ReadHistory(db)
+				if err != nil {
+					log.Println(err)
+					return
+				}
+
+				city := strings.TrimPrefix(data, "history_")
+				var msgHistory string
+				msgHistory = fmt.Sprintln("📜 Недавно запрошенная(ые) позиция(ии)")
+
+				j := 1
+				for i := len(wHistory) - 1; i >= 0; i-- {
+					if strings.EqualFold(wHistory[i].City, city) {
+						msgHistory += fmt.Sprintf("• %d: %v\n%s %d°C, %s\nWind: %.2f м/c; Pressure: %d гПа\n\n", j, wHistory[i].Date.Format("15:04, 02-01-2006"), wHistory[i].City, wHistory[i].Temp, wHistory[i].Conditions, wHistory[i].Wind_speed, wHistory[i].Pressure)
+						j++
+					}
+				}
+
+				if j == 1 {
+					msgHistory = "История не найдена. Попробуй другой город."
+				}
+
+				bot.Send(tgbot.NewMessage(chatID, msgHistory))
+				bot.Request(tgbot.NewCallback(update.CallbackQuery.ID, ""))
 			}
+
 			continue
 		}
 
 		text := strings.TrimSpace(strings.ToLower(update.Message.Text))
 		chatID := update.Message.Chat.ID
 
+		if strings.EqualFold(text, "назад") {
+			weatherstate[chatID] = ""
+			bot.Send(tgbot.NewMessage(chatID, menu))
+			continue
+		}
+
+		switch text {
+		case "/start":
+			weatherstate[chatID] = ""
+			msg := tgbot.NewMessage(update.Message.Chat.ID, "Привет, я подскажу тебе погоду☀️🌧, а также предложу стили👗🧥\n/h: Справка по командам\n/m: Меню")
+			bot.Send(msg)
+		case "/m":
+			weatherstate[chatID] = ""
+			bot.Send(tgbot.NewMessage(chatID, menu))
+		case "/weather":
+			weatherstate[chatID] = "city_request"
+			msg := tgbot.NewMessage(chatID, "Посмотри погоду, введи название города (или 'назад' для возврата в меню)")
+			bot.Send(msg)
+			continue
+		case "/history":
+			weatherstate[chatID] = "history_request"
+		case "/style":
+			weatherstate[chatID] = "style_request_city"
+			msg := tgbot.NewMessage(chatID, "Под какую погоду подоберём стиль?\n1. Последняя запрошенная\n2. Выбрать из 10 последних записей:")
+			bot.Send(msg)
+			continue
+		case "/h":
+			weatherstate[chatID] = ""
+			TextHelp := `/start: С чего всё начинать, приветствие
+/weather: Текущая погода в любой точке мира + краткие реплики по данным погоды
+/history: Недавно запрошенная погода, последние 10 записей
+/style: Подберём стиль либо под последнюю запрошенную погоду, либо под недавно запрошенную
+"назад": Возврат в меню`
+			msg := tgbot.NewMessage(update.Message.Chat.ID, TextHelp)
+			bot.Send(msg)
+		}
+
 		switch weatherstate[chatID] {
 		case "city_request":
-			if text == "назад" {
-				weatherstate[chatID] = ""
-				bot.Send(tgbot.NewMessage(chatID, "Возврат в главное меню"))
-				continue
-			}
-
 			city, temp, conditions, pressure, wind_speed, err := weather.WeatherFunc(text)
 			if city == "Введён неккоректный город" {
 				msg := tgbot.NewMessage(update.Message.Chat.ID, "Введён неккоректный город, попробуй ещё")
@@ -105,12 +170,8 @@ func Bot(db *sql.DB) {
 			)
 
 			bot.Send(msg)
+
 		case "history_request":
-			if text == "назад" || text == "2" {
-				weatherstate[chatID] = ""
-				bot.Send(tgbot.NewMessage(chatID, "Возврат в главное меню"))
-				continue
-			}
 			if err := database.HistoryLimit10(db); err != nil {
 				log.Println(err)
 				return
@@ -122,39 +183,18 @@ func Bot(db *sql.DB) {
 			} // логика выборки
 			FilterSlice := logic.FilterMap(Slicecity, wHistory)
 
-			if text == "список" || text == "1" {
-				var msgCity string
-				for _, i := range FilterSlice {
-					msgCity += fmt.Sprintf("> %s\n", i)
-				}
-				bot.Send(tgbot.NewMessage(chatID, msgCity))
-				continue
+			buttons := make([][]tgbot.InlineKeyboardButton, 0)
+			for _, city := range FilterSlice {
+				btn := tgbot.NewInlineKeyboardButtonData(city, "history_"+strings.ToLower(city))
+				buttons = append(buttons, tgbot.NewInlineKeyboardRow(btn))
 			}
+			keyboard := tgbot.NewInlineKeyboardMarkup(buttons...)
 
-			signal := 1
-			var msgHistory string
-			msgHistory = fmt.Sprintln("Недавно запрошенные позиции:")
-			for i := 9; i >= 0; i-- {
-				if text == strings.ToLower(wHistory[i].City) {
-					msgHistory += fmt.Sprintf("• %s %d°C, %s; Wind: %.2f м/c; Pressure: %d гПа; Time: %v\n", wHistory[i].City, wHistory[i].Temp, wHistory[i].Conditions, wHistory[i].Wind_speed, wHistory[i].Pressure, wHistory[i].Date.Format("15:04:05 02-01-2006"))
-					signal++
-				}
-			}
-			bot.Send(tgbot.NewMessage(chatID, msgHistory))
-			if signal == 1 {
-				bot.Send(tgbot.NewMessage(chatID, "Введён неккоректный город, давай повнимательнее"))
-				continue
-			} else {
-				bot.Send(tgbot.NewMessage(chatID, "Может ещё один?"))
-			}
+			msg := tgbot.NewMessage(chatID, "Выбери город, чтобы посмотреть историю:")
+			msg.ReplyMarkup = keyboard
+			bot.Send(msg)
 
 		case "style_choice_city":
-			if text == "назад" {
-				weatherstate[chatID] = ""
-				bot.Send(tgbot.NewMessage(chatID, "Возврат в главное меню"))
-				continue
-			}
-
 			_, wHistory, err := database.ReadHistory(db)
 			if err != nil {
 				continue
@@ -173,14 +213,13 @@ func Bot(db *sql.DB) {
 					}
 					j++
 				}
-				fmt.Println(style)
 			} else {
-				fmt.Println("Неккоректный номер")
+				log.Println("Неккоректный номер")
 			}
 			style_choice_city[chatID] = style
 			StyleString, resstyle, err := database.ClothingAdviceHistory(db, style)
 			if err != nil {
-				log.Println("Arpol")
+				log.Println("Ошибка при запросе бд из тг", err)
 			}
 
 			if StyleString == nil {
@@ -196,18 +235,13 @@ func Bot(db *sql.DB) {
 			msgStyle := fmt.Sprintln("Выберите стиль или 'назад' для возврата в меню:")
 			for index, key := range StyleString {
 				msgStyle += fmt.Sprintf("• %d: %s\n", index+1, key)
-				NewMap[index+1] = key
+				styleMap[index+1] = key
 			}
 			bot.Send(tgbot.NewMessage(chatID, msgStyle))
 
 			weatherstate[chatID] = "style_request_style"
 
 		case "style_request_city":
-			if text == "назад" {
-				weatherstate[chatID] = ""
-				bot.Send(tgbot.NewMessage(chatID, "Возврат в главное меню"))
-				continue
-			}
 			textInt, _ := strconv.Atoi(text)
 			if textInt == 2 {
 				if err := database.HistoryLimit10(db); err != nil {
@@ -224,7 +258,7 @@ func Bot(db *sql.DB) {
 				j := 1
 				var MsgCityNumber string
 				for _, i := range wHistory {
-					MsgCityNumber += fmt.Sprintf("Number: %d\n• %s %d°C, %s %v\n", j, i.City, i.Temp, i.Conditions, i.Date.Format("15:04 01-02-2006"))
+					MsgCityNumber += fmt.Sprintf("• %d: 🕒 %v\n%s %d°C, %s\n\n", j, i.Date.Format("15:04, 01-02-2006"), i.City, i.Temp, i.Conditions)
 					j++
 				}
 
@@ -252,19 +286,12 @@ func Bot(db *sql.DB) {
 			msgStyle := fmt.Sprintln("Выберите стиль или 'назад' для возврата в меню:")
 			for index, key := range StyleString {
 				msgStyle += fmt.Sprintf("• %d: %s\n", index+1, key)
-				NewMap[index+1] = key
+				styleMap[index+1] = key
 			}
 			bot.Send(tgbot.NewMessage(chatID, msgStyle))
 			weatherstate[chatID] = "style_request_style"
-			fmt.Println(NewMap) //
 
 		case "style_request_style":
-			if text == "назад" {
-				weatherstate[chatID] = ""
-				bot.Send(tgbot.NewMessage(chatID, "Возврат в главное меню"))
-				continue
-			}
-
 			TextInt, err := strconv.Atoi(text)
 			if err != nil {
 				log.Println("Неверное преобразоваение")
@@ -277,7 +304,7 @@ func Bot(db *sql.DB) {
 			if ok {
 				_, resstyle, err = database.ClothingAdviceHistory(db, value)
 				if err != nil {
-					log.Println("Arpol")
+					log.Println("Ошибка при запросе бд из тг", err)
 				}
 			} else {
 				_, _, resstyle, err = database.ClothingAdvice(db, 1)
@@ -290,11 +317,11 @@ func Bot(db *sql.DB) {
 			IsViewed := false
 			var msgResStyle string
 			for _, i := range resstyle {
-				value, _ := NewMap[TextInt]
+				value, _ := styleMap[TextInt]
 				if value == i.Style {
 					msgResStyle = fmt.Sprintf("%s:\n%s\n", i.Style, i.Comments)
 					IsViewed = true
-					delete(NewMap, TextInt)
+					delete(styleMap, TextInt)
 				}
 			}
 			bot.Send(tgbot.NewMessage(chatID, msgResStyle))
@@ -302,37 +329,17 @@ func Bot(db *sql.DB) {
 			if !IsViewed {
 				bot.Send(tgbot.NewMessage(chatID, "Такого стиля нет в списке, давай повнимательнее"))
 				continue
-			} else if len(NewMap) == 0 {
+			} else if len(styleMap) == 0 {
 				weatherstate[chatID] = ""
 				bot.Send(tgbot.NewMessage(chatID, "Стили закончились\nВозврат в главное меню"))
 				continue
 			} else if IsViewed {
 				msgStyle := fmt.Sprintln("Хочешь посмотреть другой стиль?")
-				for key, value := range NewMap {
+				for key, value := range styleMap {
 					msgStyle += fmt.Sprintf("• %d: %s\n", key, value)
 				}
 				bot.Send(tgbot.NewMessage(chatID, msgStyle))
 			}
-		}
-		switch text {
-		case "/start":
-			msg := tgbot.NewMessage(update.Message.Chat.ID, "Привет, я подскажу тебе погоду☀️🌧, а также предложу стили👗🧥\n/h")
-			bot.Send(msg)
-		case "/weather":
-			weatherstate[chatID] = "city_request"
-			msg := tgbot.NewMessage(chatID, "Посмотри погоду, введи название города (или 'назад' для возврата в меню)")
-			bot.Send(msg)
-		case "/history":
-			weatherstate[chatID] = "history_request"
-			msg := tgbot.NewMessage(chatID, "1: 'Список'\n2: 'Назад'\nНазвание города")
-			bot.Send(msg)
-		case "/style":
-			weatherstate[chatID] = "style_request_city"
-			msg := tgbot.NewMessage(chatID, "Под какую погоду подоберём стиль?\n1. Последняя запрошенная\n2. Выбрать из 10 последних записей:")
-			bot.Send(msg)
-		case "/h":
-			msg := tgbot.NewMessage(update.Message.Chat.ID, "/start, /weather, /history, /style")
-			bot.Send(msg)
 		}
 	}
 }

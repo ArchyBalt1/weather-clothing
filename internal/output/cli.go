@@ -72,12 +72,6 @@ func PrintHistoryResult(wHistory []models.WeatherHistory_10) string {
 		return "break"
 	}
 
-	/*city, err := strconv.Atoi(cityes)
-	if err != nil {
-		fmt.Println("Введена не цифра, думал не заметно? 👀")
-		return "continue"
-	}*/
-
 	j := 1
 	for i := 9; i >= 0; i-- {
 		if strings.EqualFold(cityes, wHistory[i].City) {

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
+	"strings"
 	database "weather-clothing/internal/db"
 	"weather-clothing/internal/logic"
 	"weather-clothing/internal/output"
@@ -29,39 +31,34 @@ func main() {
 	}
 	defer db.Close()
 
-	logic.LogFile()
+	logic.LogFile() // open file app.log
 
-	var start string
+	reader := bufio.NewReader(os.Stdin)
 	fmt.Print("Хотите запустить TelegramBot? y/any_key\n> ")
-	fmt.Scan(&start)
-	if start == "y" || start == "н" {
+	tgbot, _ := reader.ReadString('\n')
+	tgbot = strings.TrimSpace(tgbot)
+	if tgbot == "y" || tgbot == "н" {
 		telegram.Bot(db)
 	}
-	var a string
-	output.Hello()
-	i := 0
+
+	var menu string
 	for {
-		output.HelloMenu(&i)
-		fmt.Scan(&a)
-		switch a {
+		output.Hello()
+		menu, _ = reader.ReadString('\n')
+		menu = strings.TrimSpace(menu)
+
+		switch menu {
 		case "1":
-			var city, conditions string
-			var temp, pressure int
-			var wind_speed float32
-			var cityes string
 			output.WeatherPrint(0)
+			var city string
 			for {
-				scanner := bufio.NewScanner(os.Stdin)
-				if scanner.Scan() {
-					cityes = scanner.Text()
-				}
-				if cityes == "" {
-					continue
-				}
-				if cityes == "q" || cityes == "й" {
+				city, _ = reader.ReadString('\n')
+				city = strings.TrimSpace(city)
+				if city == "q" || city == "й" {
 					break
 				}
-				city, temp, conditions, pressure, wind_speed, err = weather.WeatherFunc(cityes)
+
+				city, temp, conditions, pressure, wind_speed, err := weather.WeatherFunc(city)
 				if city == "Введён неккоректный город" {
 					output.WeatherPrint(1)
 					continue
@@ -75,7 +72,7 @@ func main() {
 						return
 					}
 
-					notification := database.NotificationConditionsPressureWind_speed(db, conditions, pressure, wind_speed)
+					notification := database.NotificationConditionsPressureWind_speed(db, temp, conditions, pressure, wind_speed)
 
 					signal := output.PrintWeatherResult(city, temp, conditions, notification, wind_speed, pressure)
 					if signal == "break" {
@@ -89,13 +86,16 @@ func main() {
 				log.Println(err)
 				return
 			} // фильтруем 10 последних записей
+
 			Slicecity, wHistory, err := database.ReadHistory(db)
 			if err != nil {
 				log.Println(err)
 				return
 			} // логика выборки
+
 			FilterSlice := logic.FilterMap(Slicecity, wHistory)
 			output.PrintHistoryRecent_requests(FilterSlice)
+
 			for {
 				signal := output.PrintHistoryResult(wHistory)
 				if signal == "break" {
@@ -103,14 +103,16 @@ func main() {
 				} else if signal == "continue" {
 					continue
 				}
-			} // Вывод
+			}
 		case "3":
-			var b int
+			var StyleSwitch string
 			output.PrintClothingAdviceResult_Hello()
-			fmt.Scan(&b)
-			switch b {
+			StyleSwitch, _ = reader.ReadString('\n')
+			StyleSwitch = strings.TrimSpace(StyleSwitch)
+			StyleSwitchInt, _ := strconv.Atoi(StyleSwitch)
+			switch StyleSwitchInt {
 			case 1:
-				style, StyleString, resstyle, err := database.ClothingAdvice(db, b)
+				style, StyleString, resstyle, err := database.ClothingAdvice(db, StyleSwitchInt)
 				if err != nil {
 					log.Println(err)
 					return
@@ -126,9 +128,9 @@ func main() {
 				if err := database.HistoryLimit10(db); err != nil {
 					log.Println(err)
 					return
-				} // фильтруем 10 последних записей
+				}
 
-				style, StyleString, resstyle, err := database.ClothingAdvice(db, b)
+				style, StyleString, resstyle, err := database.ClothingAdvice(db, StyleSwitchInt)
 				if err != nil {
 					log.Println(err)
 					return
@@ -144,7 +146,7 @@ func main() {
 					}
 				}
 			}
-		default:
+		case "q":
 			return
 		}
 	}

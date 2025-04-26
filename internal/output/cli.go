@@ -3,22 +3,17 @@ package output
 import (
 	"bufio"
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 	"strings"
+	"unicode"
 	"weather-clothing/internal/models"
 )
 
 func Hello() {
-	fmt.Println("📋 Что сегодня хочешь узнать?")
-}
-
-func HelloMenu(i *int) {
-	if *i > 0 {
-		fmt.Println("\nДавай выясним что-то ещё")
-	}
-	fmt.Print("1: Погодные условия\n2: История запросов погодных условий\n3: Лучшие стили ➕ погодные условия\n> ")
-	*i++
+	fmt.Println("📋 Выбери пункт меню:")
+	fmt.Print("1: Погодные условия\n2: История запросов погодных условий\n3: Лучшие стили ➕ погодные условия\n'q': Завершить программу\n> ")
 }
 
 func WeatherPrint(signal int) {
@@ -34,19 +29,21 @@ func WeatherPrint(signal int) {
 }
 
 func PrintWeatherResult(city string, temp int, conditions, notification string, wind_speed float32, pressure int) string {
-	var y string
+	var details string
+	reader := bufio.NewReader(os.Stdin)
 	fmt.Printf("📍 %s %d°C, %s\n%s\n\n", city, temp, conditions, notification)
 	for {
 		fmt.Print("🔍 Хочешь увидеть подробности? (y/n/q)\n> ")
-		fmt.Scan(&y)
-		if y == "y" || y == "н" {
+		details, _ = reader.ReadString('\n')
+		details = strings.TrimSpace(details)
+
+		if details == "y" || details == "н" {
 			fmt.Printf("📊 Подробности:\n• Скорость ветра %.2f м/с\n• Давление %d гПа\nЛюбая клавиша для продолжения...", wind_speed, pressure)
-			fmt.Scan(&y)
-			fmt.Println()
+			reader.ReadString('\n')
 			break
-		} else if y == "n" || y == "т" {
+		} else if details == "n" || details == "т" {
 			break
-		} else if y == "q" || y == "й" {
+		} else if details == "q" || details == "й" {
 			return "break"
 		}
 	}
@@ -64,17 +61,22 @@ func PrintHistoryRecent_requests(FilterSlice []string) {
 }
 
 func PrintHistoryResult(wHistory []models.WeatherHistory_10) string {
-	var cityes string
+	reader := bufio.NewReader(os.Stdin)
 	fmt.Print("Введите название города (или 'q' для выхода в меню):\n> ")
-	fmt.Scan(&cityes)
+	city, err := reader.ReadString('\n')
+	if err != nil {
+		log.Println("Ошибка reader", err)
+		return "break"
+	}
+	city = strings.TrimSpace(city)
 
-	if cityes == "q" || cityes == "й" {
+	if city == "q" || city == "й" {
 		return "break"
 	}
 
 	j := 1
 	for i := 9; i >= 0; i-- {
-		if strings.EqualFold(cityes, wHistory[i].City) {
+		if strings.EqualFold(city, wHistory[i].City) {
 			if j == 1 {
 				fmt.Println("\n📋 Недавно запрошенные позиции:")
 			}
@@ -96,117 +98,137 @@ func PrintClothingAdviceResult_Hello() {
 }
 
 func PrintClothingAdviceResult(style models.Style, StyleString []string, resstyle []models.ResStyle) string {
+	reader := bufio.NewReader(os.Stdin)
 	fmt.Printf("%s %d°C, %s, %.2fм/с\n", style.City, style.Temp, style.Conditions, style.Wind_speed)
 	if StyleString == nil {
 		fmt.Println(resstyle[0].Comments)
 		return "break"
 	}
 
-	NewMap := make(map[int]string)
-	scanner := bufio.NewScanner(os.Stdin)
+	styleMap := make(map[int]string)
 	fmt.Println("Выберите стиль (или 'q' для выхода в меню):")
 	for index, key := range StyleString {
 		fmt.Printf("• %d: %s\n", index+1, key)
-		NewMap[index+1] = key
+		styleMap[index+1] = key
 	}
 	fmt.Print("> ")
-	for {
-		var value string
-		var b int
-		if scanner.Scan() {
-			if scanner.Text() == "" {
-				continue
-			} else if scanner.Text() == "q" || scanner.Text() == "й" {
-				return "break"
-			} else if scanner.Text() >= "a" && scanner.Text() <= "z" {
-				continue
-			}
 
-			b, _ = strconv.Atoi(scanner.Text())
-			value, _ = NewMap[b]
+	var StyleСhoice string
+Continue:
+	for {
+		StyleСhoice, _ = reader.ReadString('\n')
+		StyleСhoice = strings.TrimSpace(StyleСhoice)
+		if StyleСhoice == "q" || StyleСhoice == "й" {
+			return "break"
 		}
 
+		runes := []rune(StyleСhoice)
+		for i := len(runes) - 1; i >= 0; i-- {
+			if !unicode.IsDigit(runes[i]) {
+				fmt.Println("🚧 Неверный формат ввода")
+				fmt.Print("> ")
+				continue Continue
+			}
+		}
+
+		index, _ := strconv.Atoi(StyleСhoice)
 		IsViewed := false
 		for _, i := range resstyle {
-			if strings.EqualFold(i.Style, value) {
-				fmt.Printf("\n%s:\n%s\n", i.Style, i.Comments)
+			if strings.EqualFold(i.Style, styleMap[index]) {
+				fmt.Printf("\n%s:\n%s\n🎯 Не забудь взять %s\n", i.Style, i.Comments, strings.ToLower(i.Accessories))
 				fmt.Println()
 				IsViewed = true
-				delete(NewMap, b)
+				delete(styleMap, index)
 			}
 		}
 
 		if !IsViewed {
 			fmt.Println("Такого стиля нет в списке, давай повнимательнее")
-		} else if len(NewMap) == 0 {
+		} else if len(styleMap) == 0 {
 			fmt.Print("😦 Стили закончились\n")
 			return "break"
 		} else if IsViewed {
 			fmt.Println("Давай посмотрим ещё один стиль 🥷  (или 'q' для выхода в меню)")
 		}
-		for index, key := range NewMap {
+		for index, key := range styleMap {
 			fmt.Printf("• %d: %s\n", index, key)
 		}
 		fmt.Print("> ")
 	}
 }
 
-func PrintClothingAdviceResultHistory(FilterSlice []string, wHistory []models.WeatherHistory_10, style *models.Style) string {
-	var a string
+func PrintClothingAdviceResultHistory(wHistory []models.WeatherHistory_10) string {
+	reader := bufio.NewReader(os.Stdin)
 	fmt.Println("🏙️  Города и данные:")
 	j := 1
 	for _, i := range wHistory {
 		fmt.Printf("• %d: %v\n%s %d°C, %s\n\n", j, i.Date.Format("15:04, 02-01-2006"), i.City, i.Temp, i.Conditions)
 		j++
 	}
-	fmt.Print("Посмотрим подробности? y/n/q\n> ")
-	fmt.Scan(&a)
 
-	if a == "q" || a == "й" {
+	var StyleDetail string
+	for {
+		fmt.Print("Посмотрим подробности? y/n/q\n> ")
+		StyleDetail, _ = reader.ReadString('\n')
+		StyleDetail = strings.TrimSpace(StyleDetail)
+		if !(StyleDetail == "y" || StyleDetail == "n" || StyleDetail == "q") {
+			fmt.Println("🚧 Неверный формат ввода")
+			continue
+		}
+		break
+	}
+
+	if StyleDetail == "q" || StyleDetail == "й" {
 		return "breakQ"
 	}
 
-	if a == "y" || a == "н" {
+	if StyleDetail == "y" || StyleDetail == "н" {
 		for {
 			j = 1
 			fmt.Print("Введите номер города для просмотра подробностей ('q' для выхода в меню и 's' для продолжения):\n> ")
-			fmt.Scan(&a)
-			if a == "q" || a == "й" {
+			StyleDetail, _ := reader.ReadString('\n')
+			StyleDetail = strings.TrimSpace(StyleDetail)
+			if StyleDetail == "q" || StyleDetail == "й" {
 				return "breakQ"
-			} else if a == "s" || a == "ы" {
-				break
+			} else if StyleDetail == "s" || StyleDetail == "ы" {
+				return ""
 			}
 
-			aInt, err := strconv.Atoi(a)
+			StyleDetailInt, err := strconv.Atoi(StyleDetail)
 			if err != nil {
-				fmt.Println("Введено не число")
+				fmt.Println("🚧 Неверный формат ввода")
 				continue
 			}
 			for _, i := range wHistory {
-				if aInt == j {
+				if StyleDetailInt == j {
 					fmt.Printf("• %d: %v\n%s %d°C, %s\nWind: %.2f м/c; Pressure: %d гПа\n\n", j, i.Date.Format("15:04, 02-01-2006"), i.City, i.Temp, i.Conditions, i.Wind_speed, i.Pressure)
 				}
 				j++
 			}
 		}
 	}
+	return ""
+}
 
+func PrintClothingAdviceResultHistoryCity(wHistory []models.WeatherHistory_10, style *models.Style) string {
+	reader := bufio.NewReader(os.Stdin)
 	fmt.Print("Выберите желаемый номер города для подборки подходящего стиля (или 'q' для выхода в меню):\n> ")
-	j = 1
+	j := 1
 	for {
-		fmt.Scan(&a)
-		if a == "q" {
+		StyleDetail, _ := reader.ReadString('\n')
+		StyleDetail = strings.TrimSpace(StyleDetail)
+		if StyleDetail == "q" || StyleDetail == "й" {
 			return "breakQ"
 		}
 
-		aInt, err := strconv.Atoi(a)
+		StyleDetailInt, err := strconv.Atoi(StyleDetail)
 		if err != nil {
-			fmt.Println("Введено не число")
+			fmt.Println("🚧 Неверный формат ввода")
 			continue
 		}
-		if aInt >= 1 && aInt <= 10 {
+		if StyleDetailInt >= 1 && StyleDetailInt <= 10 {
 			for _, i := range wHistory {
-				if aInt == j {
+				if StyleDetailInt == j {
 					style.City = i.City
 					style.Temp = i.Temp
 					style.Conditions = i.Conditions
@@ -217,7 +239,8 @@ func PrintClothingAdviceResultHistory(FilterSlice []string, wHistory []models.We
 			return "break"
 
 		} else {
-			fmt.Println("Неккоректный номер")
+			fmt.Println("🚧 Неверный формат ввода")
+			fmt.Print("> ")
 		}
 	}
 }

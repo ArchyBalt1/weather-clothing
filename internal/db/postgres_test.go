@@ -37,6 +37,7 @@ func ConnectTestdb() *sql.DB {
 
 func TestNotificationConditionsPressureWind_speed(t *testing.T) {
 	type args struct {
+		temp       int
 		conditions string
 		pressure   int
 		wind_speed float32
@@ -59,7 +60,7 @@ func TestNotificationConditionsPressureWind_speed(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := NotificationConditionsPressureWind_speed(db, tt.args.conditions, tt.args.pressure, tt.args.wind_speed); got != tt.want {
+			if got := NotificationConditionsPressureWind_speed(db, tt.args.temp, tt.args.conditions, tt.args.pressure, tt.args.wind_speed); got != tt.want {
 				t.Errorf("NotificationConditionsPressureWind_speed() = %v, want %v", got, tt.want)
 			}
 		})

@@ -12,8 +12,9 @@ type WeatherHistory_10 struct {
 }
 
 type ResStyle struct {
-	Style    string
-	Comments string
+	Style       string
+	Comments    string
+	Accessories string
 }
 
 type Style struct {

@@ -107,17 +107,21 @@ func ClothingAdvice(db *sql.DB, b int) (models.Style, []string, []models.ResStyl
 
 		return style, StyleString, resstyle, nil
 	case 2:
-		Slicecity, wHistory, err := ReadHistory(db)
+		_, wHistory, err := ReadHistory(db)
 		if err != nil {
 			return models.Style{}, nil, nil, err
 		}
-		FilterSlice := logic.FilterMap(Slicecity, wHistory)
+		//FilterSlice := logic.FilterMap(Slicecity, wHistory)
 
 		var style models.Style
 		var resstyle []models.ResStyle
-		StyleString := []string{}
+		StyleString := make([]string, 0, 10)
 		for {
-			signal := output.PrintClothingAdviceResultHistory(FilterSlice, wHistory, &style)
+			signal := output.PrintClothingAdviceResultHistory(wHistory)
+			if signal == "breakQ" {
+				return models.Style{}, nil, nil, nil
+			}
+			signal = output.PrintClothingAdviceResultHistoryCity(wHistory, &style)
 			if signal == "breakQ" {
 				return models.Style{}, nil, nil, nil
 			}
@@ -147,10 +151,14 @@ func ClothingAdviceHistory(db *sql.DB, style models.Style) ([]string, []models.R
 }
 
 func Advice(db *sql.DB, style models.Style, resstyle *[]models.ResStyle) ([]string, error) {
-	rows, err := sq.Select("style", "comments").From("clothing_advice").Where(sq.And{
+	month := logic.TimeMonth()
+	rows, err := sq.Select("style", "comments", "accessories").From("clothing_advice").Where(sq.And{
 		sq.LtOrEq{"temp_min": style.Temp},
 		sq.GtOrEq{"temp_max": style.Temp},
-	}).Where(" ? = ANY(conditions)", style.Conditions).Where(sq.GtOrEq{"max_speed": style.Wind_speed}).PlaceholderFormat(sq.Dollar).RunWith(db).Query()
+	}).Where(" ? = ANY(conditions)", style.Conditions).Where(sq.GtOrEq{"max_speed": style.Wind_speed}).Where(sq.Or{
+		sq.Eq{"season": month},
+		sq.Eq{"season": "Любое"},
+	}).PlaceholderFormat(sq.Dollar).RunWith(db).Query()
 	if err != nil {
 		return nil, err
 	}
@@ -159,7 +167,7 @@ func Advice(db *sql.DB, style models.Style, resstyle *[]models.ResStyle) ([]stri
 	var StyleString []string
 	for rows.Next() {
 		var rs models.ResStyle
-		err := rows.Scan(&rs.Style, &rs.Comments)
+		err := rows.Scan(&rs.Style, &rs.Comments, &rs.Accessories)
 		if err != nil {
 			return nil, err
 		}
@@ -181,14 +189,14 @@ func Advice(db *sql.DB, style models.Style, resstyle *[]models.ResStyle) ([]stri
 	return StyleString, nil
 } // Поиск и вывод стилей
 
-func NotificationConditionsPressureWind_speed(db *sql.DB, conditions string, pressure int, wind_speed float32) string {
+func NotificationConditionsPressureWind_speed(db *sql.DB, temp int, conditions string, pressure int, wind_speed float32) string {
 	var wg sync.WaitGroup
 	var conditionsComments string
 	var pressureComments string
 	var wind_speedComments string
 	wg.Add(3)
 	go func() {
-		row := db.QueryRow(`SELECT conditions_comments FROM conditions_advice WHERE conditions = $1 ORDER BY Random() LIMIT(1)`, conditions)
+		row := db.QueryRow(`SELECT conditions_comments FROM conditions_advice WHERE conditions = $1 AND $2 BETWEEN temp_min AND temp_max ORDER BY Random() LIMIT(1)`, conditions, temp)
 		row.Scan(&conditionsComments)
 		wg.Done()
 	}()

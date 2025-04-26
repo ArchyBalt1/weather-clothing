@@ -154,7 +154,7 @@ func Bot(db *sql.DB) {
 				log.Println("Ошибка при сохранении в базу данных:", err)
 			}
 
-			notification := database.NotificationConditionsPressureWind_speed(db, conditions, pressure, wind_speed)
+			notification := database.NotificationConditionsPressureWind_speed(db, temp, conditions, pressure, wind_speed)
 
 			weatherMsg := fmt.Sprintf("🌤 %s %d°C, %s\n%s\n\n", city, temp, conditions, notification)
 

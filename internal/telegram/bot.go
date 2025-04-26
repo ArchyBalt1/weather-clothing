@@ -15,16 +15,16 @@ import (
 	tgbot "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
-var weatherstate = make(map[int64]string)            // отслеживание состояния для переключения режимов
-var weathercallback = make(map[int64]string)         // отслеживание кнопок
-var styleMap = make(map[int]string)                  // кеш стилей
-var style_choice_city = make(map[int64]models.Style) // кеш города из выборки в /style
+var weatherstate = make(map[int64]string)                // отслеживание состояния для переключения режимов
+var weathercallback = make(map[int64]string)             // отслеживание кнопок
+var styleMap = make(map[int]string)                      // кеш стилей
+var style_choice_city = make(map[int64]models.CityStyle) // кеш города из выборки в /style
 
 const menu = `🏠 Главное меню:
 🔹 /weather — Узнать текущую погоду
 🔹 /history — История последних запросов
 🔹 /style — Подобрать стиль по погоде
-🔹 /h — Справка по командам`
+🔹 /h, /help — Справка по командам`
 
 func Bot(db *sql.DB) {
 	tgtoken := os.Getenv("TGBOTTOKEN")
@@ -108,7 +108,7 @@ func Bot(db *sql.DB) {
 		switch text {
 		case "/start":
 			weatherstate[chatID] = ""
-			msg := tgbot.NewMessage(update.Message.Chat.ID, "Привет, я подскажу тебе погоду☀️🌧, а также предложу стили👗🧥\n/h: Справка по командам\n/m: Меню")
+			msg := tgbot.NewMessage(update.Message.Chat.ID, "Привет, я подскажу тебе погоду☀️🌧, а также предложу стили👗🧥\n/h, /help: Справка по командам\n/m: Меню")
 			bot.Send(msg)
 		case "/m":
 			weatherstate[chatID] = ""
@@ -125,13 +125,13 @@ func Bot(db *sql.DB) {
 			msg := tgbot.NewMessage(chatID, "Под какую погоду подоберём стиль?\n1. Последняя запрошенная\n2. Выбрать из 10 последних записей:")
 			bot.Send(msg)
 			continue
-		case "/h":
+		case "/h", "/help":
 			weatherstate[chatID] = ""
-			TextHelp := `/start: С чего всё начинать, приветствие
-/weather: Текущая погода в любой точке мира + краткие реплики по данным погоды
+			TextHelp := `/start: Приветствие, зачем я нужен
+/weather: Текущая погода в любой точке мира + краткие реплики по данной погоде
 /history: Недавно запрошенная погода, последние 10 записей
 /style: Подберём стиль либо под последнюю запрошенную погоду, либо под недавно запрошенную
-"назад": Возврат в меню`
+/m, "назад": Возврат в меню`
 			msg := tgbot.NewMessage(update.Message.Chat.ID, TextHelp)
 			bot.Send(msg)
 		}
@@ -200,7 +200,7 @@ func Bot(db *sql.DB) {
 				continue
 			}
 
-			var style models.Style
+			var style models.CityStyle
 			j := 1
 			textInt, _ := strconv.Atoi(text)
 			if textInt >= 1 && textInt <= 10 {
@@ -319,7 +319,7 @@ func Bot(db *sql.DB) {
 			for _, i := range resstyle {
 				value, _ := styleMap[TextInt]
 				if value == i.Style {
-					msgResStyle = fmt.Sprintf("%s:\n%s\n", i.Style, i.Comments)
+					msgResStyle = fmt.Sprintf("%s:\n%s\n🎯 Не забудь взять %s\n", i.Style, i.Comments, strings.ToLower(i.Accessories))
 					IsViewed = true
 					delete(styleMap, TextInt)
 				}

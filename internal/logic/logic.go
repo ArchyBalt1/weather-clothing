@@ -16,7 +16,7 @@ func LogFile() {
 	log.SetOutput(file)
 
 	log.SetFlags(log.Ldate | log.Ltime)
-}
+} // Файл логов
 
 func FilterMap(Slicecity []string, wHistory []models.WeatherHistory_10) []string {
 	FilterMap := make(map[string]struct{})
@@ -37,7 +37,7 @@ func FilterMap(Slicecity []string, wHistory []models.WeatherHistory_10) []string
 	}
 
 	return FilterSlice
-} // мапа как фильтр
+} // Мапа для фильтрации городов и их вывод в формате первый пришёл-первый в списке
 
 func TimeMonth() string {
 	month := time.Now().Month()
@@ -53,4 +53,4 @@ func TimeMonth() string {
 	}
 
 	return "Любое"
-}
+} // Выборка времени года, для более чёткого подбора стиля

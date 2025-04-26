@@ -18,7 +18,7 @@ func Hello() {
 
 func WeatherPrint(signal int) {
 	if signal == 0 {
-		fmt.Print("🌆 Введите название города (или 'q' для выхода в меню):\n> ")
+		fmt.Print("🌆 Введи название города (или 'q' для выхода в меню):\n> ")
 	}
 	if signal == 1 {
 		fmt.Print("Введён неккоректный город\n> ")
@@ -62,7 +62,7 @@ func PrintHistoryRecent_requests(FilterSlice []string) {
 
 func PrintHistoryResult(wHistory []models.WeatherHistory_10) string {
 	reader := bufio.NewReader(os.Stdin)
-	fmt.Print("Введите название города (или 'q' для выхода в меню):\n> ")
+	fmt.Print("Введи название города (или 'q' для выхода в меню):\n> ")
 	city, err := reader.ReadString('\n')
 	if err != nil {
 		log.Println("Ошибка reader", err)
@@ -97,7 +97,7 @@ func PrintClothingAdviceResult_Hello() {
 	fmt.Print("\n🧥 Под какую погоду подоберём стиль?\n1. Последняя запрошенная\n2. Выбрать из 10 последних записей:\n> ")
 }
 
-func PrintClothingAdviceResult(style models.Style, StyleString []string, resstyle []models.ResStyle) string {
+func PrintClothingAdviceResult(style models.CityStyle, StyleString []string, resstyle []models.ResStyle) string {
 	reader := bufio.NewReader(os.Stdin)
 	fmt.Printf("%s %d°C, %s, %.2fм/с\n", style.City, style.Temp, style.Conditions, style.Wind_speed)
 	if StyleString == nil {
@@ -106,7 +106,7 @@ func PrintClothingAdviceResult(style models.Style, StyleString []string, resstyl
 	}
 
 	styleMap := make(map[int]string)
-	fmt.Println("Выберите стиль (или 'q' для выхода в меню):")
+	fmt.Println("Выбери стиль(ли) (или 'q' для выхода в меню):")
 	for index, key := range StyleString {
 		fmt.Printf("• %d: %s\n", index+1, key)
 		styleMap[index+1] = key
@@ -185,7 +185,7 @@ func PrintClothingAdviceResultHistory(wHistory []models.WeatherHistory_10) strin
 	if StyleDetail == "y" || StyleDetail == "н" {
 		for {
 			j = 1
-			fmt.Print("Введите номер города для просмотра подробностей ('q' для выхода в меню и 's' для продолжения):\n> ")
+			fmt.Print("Введи номер города для просмотра подробностей ('q' для выхода в меню и 's' для продолжения):\n> ")
 			StyleDetail, _ := reader.ReadString('\n')
 			StyleDetail = strings.TrimSpace(StyleDetail)
 			if StyleDetail == "q" || StyleDetail == "й" {
@@ -210,9 +210,9 @@ func PrintClothingAdviceResultHistory(wHistory []models.WeatherHistory_10) strin
 	return ""
 }
 
-func PrintClothingAdviceResultHistoryCity(wHistory []models.WeatherHistory_10, style *models.Style) string {
+func PrintClothingAdviceResultHistoryCity(wHistory []models.WeatherHistory_10, style *models.CityStyle) string {
 	reader := bufio.NewReader(os.Stdin)
-	fmt.Print("Выберите желаемый номер города для подборки подходящего стиля (или 'q' для выхода в меню):\n> ")
+	fmt.Print("Выбери желаемый номер города для подборки подходящего стиля (или 'q' для выхода в меню):\n> ")
 	j := 1
 	for {
 		StyleDetail, _ := reader.ReadString('\n')
@@ -243,4 +243,8 @@ func PrintClothingAdviceResultHistoryCity(wHistory []models.WeatherHistory_10, s
 			fmt.Print("> ")
 		}
 	}
+}
+
+func Bye() {
+	fmt.Println("👋 Возвращайся скорее")
 }

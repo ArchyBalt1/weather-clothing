@@ -7,7 +7,7 @@ __weather-clothing__ - pet проект, который позволяет ва�
 * Клонируйте репозиторий
 
 ```bash
-https://github.com/ArchyBalt1/weather-clothing.git
+https://github.com/ArpolX/weather-clothing.git
 ```
 * Настройте переменные окружения с помощью папки __.env__
   
